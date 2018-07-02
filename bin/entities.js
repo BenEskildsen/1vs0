@@ -11,7 +11,8 @@ var getInitialState = function getInitialState() {
       return oneOf([0, 1]);
     }, 100),
     pointers: [],
-    success: true
+    success: true,
+    curPointer: 0
   };
 };
 

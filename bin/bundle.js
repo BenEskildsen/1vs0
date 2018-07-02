@@ -16,7 +16,13 @@ var React = require('React');
 var _require = require('./utils'),
     forEach = _require.forEach;
 
-var round = Math.round;
+var _require2 = require('./selectors'),
+    isAllocated = _require2.isAllocated,
+    getScores = _require2.getScores,
+    getPlayerPointers = _require2.getPlayerPointers;
+
+var floor = Math.floor,
+    round = Math.round;
 
 var Game = function (_React$Component) {
   _inherits(Game, _React$Component);
@@ -37,26 +43,170 @@ var Game = function (_React$Component) {
     key: 'render',
     value: function render() {
       var _state = this.state,
+          curPointer = _state.curPointer,
           memory = _state.memory,
-          pointers = _state.pointers;
+          pointers = _state.pointers,
+          turn = _state.turn,
+          success = _state.success;
       var dispatch = this.props.store.dispatch;
 
+      var scores = getScores(this.state);
+      var playerPointers = getPlayerPointers(this.state);
       var memoryRows = [];
       var memoryRow = [];
       for (var i = 0; i < memory.length; i++) {
         if (i !== 0 && i % 10 === 0) {
-          memoryRows.push(React.createElement(MemoryRow, { memoryRow: memoryRow, pointers: pointers }));
+          memoryRows.push(React.createElement(MemoryRow, {
+            index: i - 10, memoryRow: memoryRow,
+            turn: turn, pointers: playerPointers[turn]
+          }));
           memoryRow = [];
         }
         memoryRow.push(memory[i]);
       }
-      memoryRows.push(React.createElement(MemoryRow, { memoryRow: memoryRow, pointers: pointers }));
+      memoryRows.push(React.createElement(MemoryRow, {
+        index: 90, memoryRow: memoryRow,
+        turn: turn, pointers: playerPointers[turn]
+      }));
+      var xAxis = [React.createElement('div', { className: 'axisCell' })];
+      for (var x = 0; x < 10; x++) {
+        xAxis.push(React.createElement(
+          'div',
+          { className: 'axisCell' },
+          x
+        ));
+      }
+      var midTurn = turn == 0.5 || turn == 1.5;
+      var pointerList = [];
+      if (!midTurn) {
+        pointerList = playerPointers[turn].map(function (allocation) {
+          return React.createElement(
+            'span',
+            null,
+            allocation.pointer,
+            ' '
+          );
+        });
+      }
+      var buttons = React.createElement(
+        'span',
+        null,
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'malloc', size: 10, pointer: curPointer });
+            } },
+          'malloc(10)'
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'realloc', increase: 10, pointer: curPointer });
+            } },
+          'realloc(10)'
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'free', pointer: curPointer });
+            } },
+          'free(10)'
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'write', bit: turn, length: 10, address: curPointer });
+            } },
+          'write(10)'
+        ),
+        turn == 0 ? React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'calloc', size: 10, pointer: curPointer });
+            } },
+          'calloc(10)'
+        ) : ''
+      );
+      if (midTurn) {
+        buttons = [];
+      }
       return React.createElement(
         'div',
         { className: 'background' },
         React.createElement(
           'div',
+          { className: 'sideBar' },
+          React.createElement(
+            'h2',
+            null,
+            'Player Turn: ',
+            turn
+          ),
+          React.createElement(
+            'p',
+            null,
+            'Score: ',
+            scores[1],
+            ' ',
+            React.createElement(
+              'b',
+              null,
+              '1'
+            ),
+            's | ',
+            scores[0],
+            ' ',
+            React.createElement(
+              'b',
+              null,
+              '0'
+            ),
+            's'
+          ),
+          React.createElement(
+            'p',
+            null,
+            'Pointers: ',
+            pointerList
+          ),
+          React.createElement(
+            'p',
+            null,
+            'Success: ',
+            success ? 'PASS' : 'FAIL'
+          ),
+          'Memory Address:',
+          React.createElement('input', { value: curPointer,
+            onChange: function onChange(ev) {
+              return dispatch({ type: 'setPointer', pointer: parseInt(ev.target.value, 10) });
+            } }),
+          buttons,
+          React.createElement(
+            'button',
+            { onClick: function onClick() {
+                return dispatch({ type: 'endTurn' });
+              } },
+            midTurn ? 'Next Turn' : 'End Turn'
+          )
+        ),
+        React.createElement(
+          'div',
           { className: 'memory' },
+          React.createElement(
+            'h1',
+            null,
+            React.createElement(
+              'b',
+              null,
+              '1 vs 0'
+            )
+          ),
+          xAxis,
           memoryRows
         )
       );
@@ -78,10 +228,43 @@ var MemoryRow = function (_React$Component2) {
   _createClass(MemoryRow, [{
     key: 'render',
     value: function render() {
+      var _this3 = this;
+
+      var midTurn = this.props.turn == 0.5 || this.props.turn == 1.5;
+      var memoryCells = this.props.memoryRow.map(function (bit, i) {
+        var index = _this3.props.index + i;
+        var background = 'white';
+        if (bit == 1) {
+          background = 'rgba(200, 200, 200, 0.13)';
+        }
+        if (!midTurn && isAllocated(_this3.props.pointers, index)) {
+          background = 'lightsteelblue';
+        }
+        if (!midTurn) {
+          _this3.props.pointers.forEach(function (allocation) {
+            if (allocation.pointer == index) background = 'steelblue';
+          });
+        }
+        return React.createElement(
+          'div',
+          {
+            className: 'memoryCell',
+            style: {
+              backgroundColor: background
+            }
+          },
+          bit
+        );
+      });
       return React.createElement(
         'div',
         { key: this.props.memoryRow.toString(), className: 'memoryRow' },
-        this.props.memoryRow
+        React.createElement(
+          'div',
+          { className: 'axisCell' },
+          this.props.index
+        ),
+        memoryCells
       );
     }
   }]);
@@ -90,7 +273,7 @@ var MemoryRow = function (_React$Component2) {
 }(React.Component);
 
 module.exports = Game;
-},{"./utils":5,"React":8}],2:[function(require,module,exports){
+},{"./selectors":5,"./utils":6,"React":9}],2:[function(require,module,exports){
 'use strict';
 
 var _require = require('./utils'),
@@ -104,14 +287,15 @@ var getInitialState = function getInitialState() {
       return oneOf([0, 1]);
     }, 100),
     pointers: [],
-    success: true
+    success: true,
+    curPointer: 0
   };
 };
 
 module.exports = {
   getInitialState: getInitialState
 };
-},{"./utils":5}],3:[function(require,module,exports){
+},{"./utils":6}],3:[function(require,module,exports){
 'use strict';
 
 var _require = require('redux'),
@@ -128,7 +312,7 @@ var store = createStore(rootReducer);
 window.store = store; // useful for debugging
 
 ReactDOM.render(React.createElement(Game, { store: store }), document.getElementById('container'));
-},{"./Game.react":1,"./reducers":4,"react":31,"react-dom":28,"redux":32}],4:[function(require,module,exports){
+},{"./Game.react":1,"./reducers":4,"react":32,"react-dom":29,"redux":33}],4:[function(require,module,exports){
 'use strict';
 
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
@@ -159,6 +343,15 @@ var rootReducer = function rootReducer(state, action) {
       turn = state.turn;
 
   switch (action.type) {
+    case 'endTurn':
+      return _extends({}, state, {
+        curPointer: 0,
+        turn: (state.turn + 0.5) % 2
+      });
+    case 'setPointer':
+      return _extends({}, state, {
+        curPointer: action.pointer >= 0 ? action.pointer : ''
+      });
     case 'malloc':
       return malloc(state, action);
     case 'free':
@@ -166,7 +359,7 @@ var rootReducer = function rootReducer(state, action) {
     case 'write':
       return write(state, action);
     case 'realloc':
-      return write(state, action);
+      return realloc(state, action);
     case 'calloc':
       return calloc(state, action);
   }
@@ -184,9 +377,8 @@ var malloc = function malloc(state, action) {
     success = false;
   }
   return _extends({}, state, {
-    pointers: success ? _extends({}, pointers, _defineProperty({}, pointer, { player: turn, size: size })) : pointers,
-    success: success,
-    turn: (turn + 1) % 2
+    pointers: success ? _extends({}, pointers, _defineProperty({}, pointer, { pointer: pointer, player: turn, size: size })) : pointers,
+    success: success
   });
 };
 
@@ -198,34 +390,36 @@ var free = function free(state, action) {
   var nextPointers = _extends({}, pointers);
   var success = false;
   if (pointers[pointer]) {
-    console.log(pointers[pointer]);
     success = true;
     delete nextPointers[pointer];
-    console.log(nextPointers);
   }
-  return _extends({}, state, { pointers: nextPointers, turn: (turn + 1) % 2, success: success });
+  return _extends({}, state, { pointers: nextPointers, success: success });
 };
 
 var write = function write(state, action) {
   var pointers = state.pointers,
       memory = state.memory,
       turn = state.turn;
-  var pointer = action.pointer,
-      offset = action.offset,
+  var address = action.address,
       length = action.length,
       bit = action.bit;
 
-  var allocation = pointers[pointer];
-  var success = true;
-  if (!allocation || allocation.player != bit || allocation.size < offset + length) {
-    success = false;
-    return _extends({}, state, { success: success, turn: (turn + 1) % 2 });
+  var success = false;
+  for (var i = 0; i < memory.length; i++) {
+    var allocation = pointers[i];
+    if (allocation && allocation.player == bit && address >= allocation.pointer && address + length <= allocation.pointer + allocation.size) {
+      success = true;
+      break;
+    }
+  }
+  if (!success) {
+    return _extends({}, state, { success: success });
   }
   var nextMemory = [].concat(_toConsumableArray(memory));
-  for (var i = 0; i < length; i++) {
-    nextMemory[pointer + offset + i] = bit;
+  for (var _i = 0; _i < length; _i++) {
+    nextMemory[address + _i] = bit;
   }
-  return _extends({}, state, { memory: nextMemory, success: success, turn: (turn + 1) % 2 });
+  return _extends({}, state, { memory: nextMemory, success: success });
 };
 
 // TODO: implement realloc taking up to as much as it can when it overlaps a friendly pointer
@@ -239,11 +433,11 @@ var realloc = function realloc(state, action) {
   var success = true;
   if (!allocation || overlaps(pointers, pointer + 1, allocation.size + increase - 1)) {
     success = false;
-    return _extends({}, state, { success: success, turn: (turn + 1) % 2 });
+    return _extends({}, state, { success: success });
   }
   var nextPointers = [].concat(_toConsumableArray(pointers));
   nextPointers[pointer] = _extends({}, allocation, { size: allocation.size + increase });
-  return _extends({}, state, { pointers: nextPointers, success: success, turn: (turn + 1) % 2 });
+  return _extends({}, state, { pointers: nextPointers, success: success });
 };
 
 var calloc = function calloc(state, action) {
@@ -252,12 +446,10 @@ var calloc = function calloc(state, action) {
 
   var mallocState = malloc(state, { type: 'malloc', pointer: pointer, size: size });
   if (!mallocState.success) {
+    console.log("?");
     return mallocState;
   }
-  var writeState = write(mallocState, { type: 'write', pointer: pointer, offset: 0, bit: 0, length: size });
-  return _extends({}, writeState, {
-    turn: (writeState.turn + 1) % 2
-  });
+  return write(mallocState, { type: 'write', address: pointer, bit: 0, length: size });
 };
 
 var overlaps = function overlaps(pointers, pointer, size) {
@@ -270,7 +462,42 @@ var overlaps = function overlaps(pointers, pointer, size) {
 };
 
 module.exports = { rootReducer: rootReducer };
-},{"./entities":2,"./utils":5}],5:[function(require,module,exports){
+},{"./entities":2,"./utils":6}],5:[function(require,module,exports){
+"use strict";
+
+var getScores = function getScores(state) {
+  var scores = [0, 0];
+  state.memory.forEach(function (bit) {
+    return scores[bit]++;
+  });
+  return scores;
+};
+
+var getPlayerPointers = function getPlayerPointers(state) {
+  var playerPointers = [[], []];
+  for (var i = 0; i < state.memory.length; i++) {
+    var pointer = state.pointers[i];
+    if (pointer) playerPointers[pointer.player].push(pointer);
+  }
+  return playerPointers;
+};
+
+var isAllocated = function isAllocated(pointers, i) {
+  var isAllocated = false;
+  pointers.forEach(function (pointer) {
+    if (i >= pointer.pointer && i < pointer.pointer + pointer.size) {
+      isAllocated = true;
+    }
+  });
+  return isAllocated;
+};
+
+module.exports = {
+  isAllocated: isAllocated,
+  getScores: getScores,
+  getPlayerPointers: getPlayerPointers
+};
+},{}],6:[function(require,module,exports){
 "use strict";
 
 var floor = Math.floor,
@@ -332,7 +559,7 @@ module.exports = {
   maybeMinus: maybeMinus,
   orZero: orZero
 };
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 (function (process){
 /** @license React v16.4.1
  * react.development.js
@@ -1822,7 +2049,7 @@ module.exports = react;
 }
 
 }).call(this,require('_process'))
-},{"_process":35,"fbjs/lib/emptyFunction":13,"fbjs/lib/emptyObject":14,"fbjs/lib/invariant":18,"fbjs/lib/warning":22,"object-assign":23,"prop-types/checkPropTypes":24}],7:[function(require,module,exports){
+},{"_process":36,"fbjs/lib/emptyFunction":14,"fbjs/lib/emptyObject":15,"fbjs/lib/invariant":19,"fbjs/lib/warning":23,"object-assign":24,"prop-types/checkPropTypes":25}],8:[function(require,module,exports){
 /** @license React v16.4.1
  * react.production.min.js
  *
@@ -1846,7 +2073,7 @@ _calculateChangedBits:b,_defaultValue:a,_currentValue:a,_currentValue2:a,_change
 b.key&&(g=""+b.key);var l=void 0;a.type&&a.type.defaultProps&&(l=a.type.defaultProps);for(c in b)K.call(b,c)&&!L.hasOwnProperty(c)&&(d[c]=void 0===b[c]&&void 0!==l?l[c]:b[c])}c=arguments.length-2;if(1===c)d.children=e;else if(1<c){l=Array(c);for(var m=0;m<c;m++)l[m]=arguments[m+2];d.children=l}return{$$typeof:t,type:a.type,key:g,ref:h,props:d,_owner:f}},createFactory:function(a){var b=M.bind(null,a);b.type=a;return b},isValidElement:N,version:"16.4.1",__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{ReactCurrentOwner:J,
 assign:k}},Y={default:X},Z=Y&&X||Y;module.exports=Z.default?Z.default:Z;
 
-},{"fbjs/lib/emptyFunction":13,"fbjs/lib/emptyObject":14,"fbjs/lib/invariant":18,"object-assign":23}],8:[function(require,module,exports){
+},{"fbjs/lib/emptyFunction":14,"fbjs/lib/emptyObject":15,"fbjs/lib/invariant":19,"object-assign":24}],9:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -1857,7 +2084,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react.development.js":6,"./cjs/react.production.min.js":7,"_process":35}],9:[function(require,module,exports){
+},{"./cjs/react.development.js":7,"./cjs/react.production.min.js":8,"_process":36}],10:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -1891,7 +2118,7 @@ var ExecutionEnvironment = {
 };
 
 module.exports = ExecutionEnvironment;
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 /**
@@ -1921,7 +2148,7 @@ function camelize(string) {
 }
 
 module.exports = camelize;
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -1959,7 +2186,7 @@ function camelizeStyleName(string) {
 }
 
 module.exports = camelizeStyleName;
-},{"./camelize":10}],12:[function(require,module,exports){
+},{"./camelize":11}],13:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1997,7 +2224,7 @@ function containsNode(outerNode, innerNode) {
 }
 
 module.exports = containsNode;
-},{"./isTextNode":20}],13:[function(require,module,exports){
+},{"./isTextNode":21}],14:[function(require,module,exports){
 "use strict";
 
 /**
@@ -2034,7 +2261,7 @@ emptyFunction.thatReturnsArgument = function (arg) {
 };
 
 module.exports = emptyFunction;
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -2054,7 +2281,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = emptyObject;
 }).call(this,require('_process'))
-},{"_process":35}],15:[function(require,module,exports){
+},{"_process":36}],16:[function(require,module,exports){
 'use strict';
 
 /**
@@ -2091,7 +2318,7 @@ function getActiveElement(doc) /*?DOMElement*/{
 }
 
 module.exports = getActiveElement;
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 
 /**
@@ -2122,7 +2349,7 @@ function hyphenate(string) {
 }
 
 module.exports = hyphenate;
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -2159,7 +2386,7 @@ function hyphenateStyleName(string) {
 }
 
 module.exports = hyphenateStyleName;
-},{"./hyphenate":16}],18:[function(require,module,exports){
+},{"./hyphenate":17}],19:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -2215,7 +2442,7 @@ function invariant(condition, format, a, b, c, d, e, f) {
 
 module.exports = invariant;
 }).call(this,require('_process'))
-},{"_process":35}],19:[function(require,module,exports){
+},{"_process":36}],20:[function(require,module,exports){
 'use strict';
 
 /**
@@ -2238,7 +2465,7 @@ function isNode(object) {
 }
 
 module.exports = isNode;
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 'use strict';
 
 /**
@@ -2261,7 +2488,7 @@ function isTextNode(object) {
 }
 
 module.exports = isTextNode;
-},{"./isNode":19}],21:[function(require,module,exports){
+},{"./isNode":20}],22:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -2327,7 +2554,7 @@ function shallowEqual(objA, objB) {
 }
 
 module.exports = shallowEqual;
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2014-present, Facebook, Inc.
@@ -2392,7 +2619,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = warning;
 }).call(this,require('_process'))
-},{"./emptyFunction":13,"_process":35}],23:[function(require,module,exports){
+},{"./emptyFunction":14,"_process":36}],24:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -2484,7 +2711,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -2579,7 +2806,7 @@ function checkPropTypes(typeSpecs, values, location, componentName, getStack) {
 module.exports = checkPropTypes;
 
 }).call(this,require('_process'))
-},{"./lib/ReactPropTypesSecret":25,"_process":35}],25:[function(require,module,exports){
+},{"./lib/ReactPropTypesSecret":26,"_process":36}],26:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -2593,7 +2820,7 @@ var ReactPropTypesSecret = 'SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED';
 
 module.exports = ReactPropTypesSecret;
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 (function (process){
 /** @license React v16.4.1
  * react-dom.development.js
@@ -20027,7 +20254,7 @@ module.exports = reactDom;
 }
 
 }).call(this,require('_process'))
-},{"_process":35,"fbjs/lib/ExecutionEnvironment":9,"fbjs/lib/camelizeStyleName":11,"fbjs/lib/containsNode":12,"fbjs/lib/emptyFunction":13,"fbjs/lib/emptyObject":14,"fbjs/lib/getActiveElement":15,"fbjs/lib/hyphenateStyleName":17,"fbjs/lib/invariant":18,"fbjs/lib/shallowEqual":21,"fbjs/lib/warning":22,"object-assign":23,"prop-types/checkPropTypes":24,"react":31}],27:[function(require,module,exports){
+},{"_process":36,"fbjs/lib/ExecutionEnvironment":10,"fbjs/lib/camelizeStyleName":12,"fbjs/lib/containsNode":13,"fbjs/lib/emptyFunction":14,"fbjs/lib/emptyObject":15,"fbjs/lib/getActiveElement":16,"fbjs/lib/hyphenateStyleName":18,"fbjs/lib/invariant":19,"fbjs/lib/shallowEqual":22,"fbjs/lib/warning":23,"object-assign":24,"prop-types/checkPropTypes":25,"react":32}],28:[function(require,module,exports){
 /** @license React v16.4.1
  * react-dom.production.min.js
  *
@@ -20269,7 +20496,7 @@ var vi={createPortal:ui,findDOMNode:function(a){return null==a?null:1===a.nodeTy
 arguments)},unstable_batchedUpdates:bi,unstable_deferredUpdates:Hh,unstable_interactiveUpdates:ei,flushSync:di,unstable_flushControlled:fi,__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{EventPluginHub:Ka,EventPluginRegistry:va,EventPropagators:$a,ReactControlledComponent:Rb,ReactDOMComponentTree:Qa,ReactDOMEventListener:Nd},unstable_createRoot:function(a,b){return new qi(a,!0,null!=b&&!0===b.hydrate)}};ki({findFiberByHostInstance:Na,bundleType:0,version:"16.4.1",rendererPackageName:"react-dom"});
 var Ai={default:vi},Bi=Ai&&vi||Ai;module.exports=Bi.default?Bi.default:Bi;
 
-},{"fbjs/lib/ExecutionEnvironment":9,"fbjs/lib/containsNode":12,"fbjs/lib/emptyFunction":13,"fbjs/lib/emptyObject":14,"fbjs/lib/getActiveElement":15,"fbjs/lib/invariant":18,"fbjs/lib/shallowEqual":21,"object-assign":23,"react":31}],28:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":10,"fbjs/lib/containsNode":13,"fbjs/lib/emptyFunction":14,"fbjs/lib/emptyObject":15,"fbjs/lib/getActiveElement":16,"fbjs/lib/invariant":19,"fbjs/lib/shallowEqual":22,"object-assign":24,"react":32}],29:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -20311,13 +20538,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react-dom.development.js":26,"./cjs/react-dom.production.min.js":27,"_process":35}],29:[function(require,module,exports){
-arguments[4][6][0].apply(exports,arguments)
-},{"_process":35,"dup":6,"fbjs/lib/emptyFunction":13,"fbjs/lib/emptyObject":14,"fbjs/lib/invariant":18,"fbjs/lib/warning":22,"object-assign":23,"prop-types/checkPropTypes":24}],30:[function(require,module,exports){
+},{"./cjs/react-dom.development.js":27,"./cjs/react-dom.production.min.js":28,"_process":36}],30:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"dup":7,"fbjs/lib/emptyFunction":13,"fbjs/lib/emptyObject":14,"fbjs/lib/invariant":18,"object-assign":23}],31:[function(require,module,exports){
+},{"_process":36,"dup":7,"fbjs/lib/emptyFunction":14,"fbjs/lib/emptyObject":15,"fbjs/lib/invariant":19,"fbjs/lib/warning":23,"object-assign":24,"prop-types/checkPropTypes":25}],31:[function(require,module,exports){
 arguments[4][8][0].apply(exports,arguments)
-},{"./cjs/react.development.js":29,"./cjs/react.production.min.js":30,"_process":35,"dup":8}],32:[function(require,module,exports){
+},{"dup":8,"fbjs/lib/emptyFunction":14,"fbjs/lib/emptyObject":15,"fbjs/lib/invariant":19,"object-assign":24}],32:[function(require,module,exports){
+arguments[4][9][0].apply(exports,arguments)
+},{"./cjs/react.development.js":30,"./cjs/react.production.min.js":31,"_process":36,"dup":9}],33:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -20920,7 +21147,7 @@ exports.compose = compose;
 exports.__DO_NOT_USE__ActionTypes = ActionTypes;
 
 }).call(this,require('_process'))
-},{"_process":35,"symbol-observable":33}],33:[function(require,module,exports){
+},{"_process":36,"symbol-observable":34}],34:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -20952,7 +21179,7 @@ if (typeof self !== 'undefined') {
 var result = (0, _ponyfill2['default'])(root);
 exports['default'] = result;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./ponyfill.js":34}],34:[function(require,module,exports){
+},{"./ponyfill.js":35}],35:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -20976,7 +21203,7 @@ function symbolObservablePonyfill(root) {
 
 	return result;
 };
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 

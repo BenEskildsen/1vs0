@@ -10,13 +10,24 @@ export type Action = Malloc | Free | Write | Realloc | Calloc;
 export type Malloc = {type: 'malloc', size: number, pointer: Pointer};
 export type Realloc = {type: 'realloc', increase: number, pointer: Pointer};
 export type Free = {type: 'free', pointer: Pointer};
-export type Write = {type: 'write', pointer: Pointer, offset: number, bit: Bit, length: number};
+export type Write = {type: 'write', address: number, bit: Bit, length: number};
 export type Calloc = {type: 'calloc', size: number, pointer: Pointer};
 
 const rootReducer = (state: State, action: Action): State => {
 	if (state === undefined) return getInitialState();
 	const {memory, pointers, success, turn} = state;
 	switch (action.type) {
+    case 'endTurn':
+      return {
+        ...state,
+        curPointer: 0,
+        turn: (state.turn + 0.5) % 2,
+      };
+    case 'setPointer':
+      return {
+        ...state,
+        curPointer: action.pointer >= 0 ? action.pointer : '',
+      };
 		case 'malloc':
       return malloc(state, action);
     case 'free':
@@ -24,7 +35,7 @@ const rootReducer = (state: State, action: Action): State => {
     case 'write':
       return write(state, action);
     case 'realloc':
-      return write(state, action);
+      return realloc(state, action);
     case 'calloc':
       return calloc(state, action);
 	}
@@ -40,9 +51,8 @@ const malloc = (state: State, action: Malloc): State => {
   }
   return {
     ...state,
-    pointers: success ? {...pointers, [pointer]: {player: turn, size}} : pointers,
+    pointers: success ? {...pointers, [pointer]: {pointer, player: turn, size}} : pointers,
     success,
-    turn: (turn + 1) % 2,
   };
 };
 
@@ -52,28 +62,35 @@ const free = (state: State, action: Free): State => {
   const nextPointers = {...pointers};
   let success = false;
   if (pointers[pointer]) {
-    console.log(pointers[pointer]);
     success = true;
     delete nextPointers[pointer];
-    console.log(nextPointers);
   }
-  return {...state, pointers: nextPointers, turn: (turn + 1) % 2, success};
+  return {...state, pointers: nextPointers, success};
 };
 
 const write = (state: State, action: Write): State => {
   const {pointers, memory, turn} = state;
-  const {pointer, offset, length, bit} = action;
-  const allocation = pointers[pointer];
-  let success = true;
-  if (!allocation || allocation.player != bit || allocation.size < offset + length) {
-    success = false;
-    return {...state, success, turn: (turn + 1) % 2};
+  const {address, length, bit} = action;
+  let success = false;
+  for (let i = 0; i < memory.length; i++) {
+    const allocation = pointers[i];
+    if (
+      allocation && allocation.player == bit &&
+      address >= allocation.pointer &&
+      address + length <= allocation.pointer + allocation.size
+    ) {
+      success = true;
+      break;
+    }
+  }
+  if (!success) {
+    return {...state, success};
   }
   const nextMemory = [...memory];
   for (let i = 0; i < length; i++) {
-    nextMemory[pointer + offset + i] = bit;
+    nextMemory[address + i] = bit;
   }
-  return {...state, memory: nextMemory, success, turn: (turn + 1) % 2};
+  return {...state, memory: nextMemory, success};
 };
 
 // TODO: implement realloc taking up to as much as it can when it overlaps a friendly pointer
@@ -84,11 +101,11 @@ const realloc = (state: State, action: Realloc): State => {
   let success = true;
   if (!allocation || overlaps(pointers, pointer + 1, allocation.size + increase - 1)) {
     success = false;
-    return {...state, success, turn: (turn + 1) % 2};
+    return {...state, success};
   }
   const nextPointers = [...pointers];
   nextPointers[pointer] = {...allocation, size: allocation.size + increase};
-  return {...state, pointers: nextPointers, success, turn: (turn + 1) % 2};
+  return {...state, pointers: nextPointers, success};
 };
 
 const calloc = (state: State, action: Calloc): State => {
@@ -97,15 +114,11 @@ const calloc = (state: State, action: Calloc): State => {
   if (!mallocState.success) {
     return mallocState;
   }
-  const writeState = write(
-    mallocState, {type: 'write', pointer, offset: 0, bit: 0, length: size},
+  return write(
+    mallocState, {type: 'write', address: pointer, bit: 0, length: size},
   );
-  return {
-    ...writeState,
-    turn: (writeState.turn + 1) % 2,
-  }
 };
-
+// TODO: check if you're already in allocated memory
 const overlaps = (pointers: Array<Allocation>, pointer: Pointer, size: number): boolean => {
   for (let i = 0; i < size; i++) {
     if (pointers[pointer + i]) {

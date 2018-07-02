@@ -28,6 +28,15 @@ var rootReducer = function rootReducer(state, action) {
       turn = state.turn;
 
   switch (action.type) {
+    case 'endTurn':
+      return _extends({}, state, {
+        curPointer: 0,
+        turn: (state.turn + 0.5) % 2
+      });
+    case 'setPointer':
+      return _extends({}, state, {
+        curPointer: action.pointer >= 0 ? action.pointer : ''
+      });
     case 'malloc':
       return malloc(state, action);
     case 'free':
@@ -35,7 +44,7 @@ var rootReducer = function rootReducer(state, action) {
     case 'write':
       return write(state, action);
     case 'realloc':
-      return write(state, action);
+      return realloc(state, action);
     case 'calloc':
       return calloc(state, action);
   }
@@ -53,9 +62,8 @@ var malloc = function malloc(state, action) {
     success = false;
   }
   return _extends({}, state, {
-    pointers: success ? _extends({}, pointers, _defineProperty({}, pointer, { player: turn, size: size })) : pointers,
-    success: success,
-    turn: (turn + 1) % 2
+    pointers: success ? _extends({}, pointers, _defineProperty({}, pointer, { pointer: pointer, player: turn, size: size })) : pointers,
+    success: success
   });
 };
 
@@ -67,34 +75,36 @@ var free = function free(state, action) {
   var nextPointers = _extends({}, pointers);
   var success = false;
   if (pointers[pointer]) {
-    console.log(pointers[pointer]);
     success = true;
     delete nextPointers[pointer];
-    console.log(nextPointers);
   }
-  return _extends({}, state, { pointers: nextPointers, turn: (turn + 1) % 2, success: success });
+  return _extends({}, state, { pointers: nextPointers, success: success });
 };
 
 var write = function write(state, action) {
   var pointers = state.pointers,
       memory = state.memory,
       turn = state.turn;
-  var pointer = action.pointer,
-      offset = action.offset,
+  var address = action.address,
       length = action.length,
       bit = action.bit;
 
-  var allocation = pointers[pointer];
-  var success = true;
-  if (!allocation || allocation.player != bit || allocation.size < offset + length) {
-    success = false;
-    return _extends({}, state, { success: success, turn: (turn + 1) % 2 });
+  var success = false;
+  for (var i = 0; i < memory.length; i++) {
+    var allocation = pointers[i];
+    if (allocation && allocation.player == bit && address >= allocation.pointer && address + length <= allocation.pointer + allocation.size) {
+      success = true;
+      break;
+    }
+  }
+  if (!success) {
+    return _extends({}, state, { success: success });
   }
   var nextMemory = [].concat(_toConsumableArray(memory));
-  for (var i = 0; i < length; i++) {
-    nextMemory[pointer + offset + i] = bit;
+  for (var _i = 0; _i < length; _i++) {
+    nextMemory[address + _i] = bit;
   }
-  return _extends({}, state, { memory: nextMemory, success: success, turn: (turn + 1) % 2 });
+  return _extends({}, state, { memory: nextMemory, success: success });
 };
 
 // TODO: implement realloc taking up to as much as it can when it overlaps a friendly pointer
@@ -108,11 +118,11 @@ var realloc = function realloc(state, action) {
   var success = true;
   if (!allocation || overlaps(pointers, pointer + 1, allocation.size + increase - 1)) {
     success = false;
-    return _extends({}, state, { success: success, turn: (turn + 1) % 2 });
+    return _extends({}, state, { success: success });
   }
   var nextPointers = [].concat(_toConsumableArray(pointers));
   nextPointers[pointer] = _extends({}, allocation, { size: allocation.size + increase });
-  return _extends({}, state, { pointers: nextPointers, success: success, turn: (turn + 1) % 2 });
+  return _extends({}, state, { pointers: nextPointers, success: success });
 };
 
 var calloc = function calloc(state, action) {
@@ -121,12 +131,10 @@ var calloc = function calloc(state, action) {
 
   var mallocState = malloc(state, { type: 'malloc', pointer: pointer, size: size });
   if (!mallocState.success) {
+    console.log("?");
     return mallocState;
   }
-  var writeState = write(mallocState, { type: 'write', pointer: pointer, offset: 0, bit: 0, length: size });
-  return _extends({}, writeState, {
-    turn: (writeState.turn + 1) % 2
-  });
+  return write(mallocState, { type: 'write', address: pointer, bit: 0, length: size });
 };
 
 var overlaps = function overlaps(pointers, pointer, size) {

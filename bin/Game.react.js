@@ -15,7 +15,13 @@ var React = require('React');
 var _require = require('./utils'),
     forEach = _require.forEach;
 
-var round = Math.round;
+var _require2 = require('./selectors'),
+    isAllocated = _require2.isAllocated,
+    getScores = _require2.getScores,
+    getPlayerPointers = _require2.getPlayerPointers;
+
+var floor = Math.floor,
+    round = Math.round;
 
 var Game = function (_React$Component) {
   _inherits(Game, _React$Component);
@@ -36,26 +42,170 @@ var Game = function (_React$Component) {
     key: 'render',
     value: function render() {
       var _state = this.state,
+          curPointer = _state.curPointer,
           memory = _state.memory,
-          pointers = _state.pointers;
+          pointers = _state.pointers,
+          turn = _state.turn,
+          success = _state.success;
       var dispatch = this.props.store.dispatch;
 
+      var scores = getScores(this.state);
+      var playerPointers = getPlayerPointers(this.state);
       var memoryRows = [];
       var memoryRow = [];
       for (var i = 0; i < memory.length; i++) {
         if (i !== 0 && i % 10 === 0) {
-          memoryRows.push(React.createElement(MemoryRow, { memoryRow: memoryRow, pointers: pointers }));
+          memoryRows.push(React.createElement(MemoryRow, {
+            index: i - 10, memoryRow: memoryRow,
+            turn: turn, pointers: playerPointers[turn]
+          }));
           memoryRow = [];
         }
         memoryRow.push(memory[i]);
       }
-      memoryRows.push(React.createElement(MemoryRow, { memoryRow: memoryRow, pointers: pointers }));
+      memoryRows.push(React.createElement(MemoryRow, {
+        index: 90, memoryRow: memoryRow,
+        turn: turn, pointers: playerPointers[turn]
+      }));
+      var xAxis = [React.createElement('div', { className: 'axisCell' })];
+      for (var x = 0; x < 10; x++) {
+        xAxis.push(React.createElement(
+          'div',
+          { className: 'axisCell' },
+          x
+        ));
+      }
+      var midTurn = turn == 0.5 || turn == 1.5;
+      var pointerList = [];
+      if (!midTurn) {
+        pointerList = playerPointers[turn].map(function (allocation) {
+          return React.createElement(
+            'span',
+            null,
+            allocation.pointer,
+            ' '
+          );
+        });
+      }
+      var buttons = React.createElement(
+        'span',
+        null,
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'malloc', size: 10, pointer: curPointer });
+            } },
+          'malloc(10)'
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'realloc', increase: 10, pointer: curPointer });
+            } },
+          'realloc(10)'
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'free', pointer: curPointer });
+            } },
+          'free(10)'
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'write', bit: turn, length: 10, address: curPointer });
+            } },
+          'write(10)'
+        ),
+        turn == 0 ? React.createElement(
+          'button',
+          {
+            onClick: function onClick() {
+              return dispatch({ type: 'calloc', size: 10, pointer: curPointer });
+            } },
+          'calloc(10)'
+        ) : ''
+      );
+      if (midTurn) {
+        buttons = [];
+      }
       return React.createElement(
         'div',
         { className: 'background' },
         React.createElement(
           'div',
+          { className: 'sideBar' },
+          React.createElement(
+            'h2',
+            null,
+            'Player Turn: ',
+            turn
+          ),
+          React.createElement(
+            'p',
+            null,
+            'Score: ',
+            scores[1],
+            ' ',
+            React.createElement(
+              'b',
+              null,
+              '1'
+            ),
+            's | ',
+            scores[0],
+            ' ',
+            React.createElement(
+              'b',
+              null,
+              '0'
+            ),
+            's'
+          ),
+          React.createElement(
+            'p',
+            null,
+            'Pointers: ',
+            pointerList
+          ),
+          React.createElement(
+            'p',
+            null,
+            'Success: ',
+            success ? 'PASS' : 'FAIL'
+          ),
+          'Memory Address:',
+          React.createElement('input', { value: curPointer,
+            onChange: function onChange(ev) {
+              return dispatch({ type: 'setPointer', pointer: parseInt(ev.target.value, 10) });
+            } }),
+          buttons,
+          React.createElement(
+            'button',
+            { onClick: function onClick() {
+                return dispatch({ type: 'endTurn' });
+              } },
+            midTurn ? 'Next Turn' : 'End Turn'
+          )
+        ),
+        React.createElement(
+          'div',
           { className: 'memory' },
+          React.createElement(
+            'h1',
+            null,
+            React.createElement(
+              'b',
+              null,
+              '1 vs 0'
+            )
+          ),
+          xAxis,
           memoryRows
         )
       );
@@ -77,10 +227,43 @@ var MemoryRow = function (_React$Component2) {
   _createClass(MemoryRow, [{
     key: 'render',
     value: function render() {
+      var _this3 = this;
+
+      var midTurn = this.props.turn == 0.5 || this.props.turn == 1.5;
+      var memoryCells = this.props.memoryRow.map(function (bit, i) {
+        var index = _this3.props.index + i;
+        var background = 'white';
+        if (bit == 1) {
+          background = 'rgba(200, 200, 200, 0.13)';
+        }
+        if (!midTurn && isAllocated(_this3.props.pointers, index)) {
+          background = 'lightsteelblue';
+        }
+        if (!midTurn) {
+          _this3.props.pointers.forEach(function (allocation) {
+            if (allocation.pointer == index) background = 'steelblue';
+          });
+        }
+        return React.createElement(
+          'div',
+          {
+            className: 'memoryCell',
+            style: {
+              backgroundColor: background
+            }
+          },
+          bit
+        );
+      });
       return React.createElement(
         'div',
         { key: this.props.memoryRow.toString(), className: 'memoryRow' },
-        this.props.memoryRow
+        React.createElement(
+          'div',
+          { className: 'axisCell' },
+          this.props.index
+        ),
+        memoryCells
       );
     }
   }]);

@@ -10,6 +10,7 @@ const getInitialState = (): State => {
     memory: initArray((i) => oneOf([0, 1]), 100),
     pointers: [],
     success: true,
+    curPointer: 0,
   }
 };
 
